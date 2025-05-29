@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-T">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive School Tech Task Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Report Info: Task List -> Goal: Navigate -> Viz/Presentation: Clickable categorized sidebar list -> Interaction: Click to select category/task -> Justification: Easy browsing & filtering -> Library/Method: HTML/JS
+        - Report Info: Task Description -> Goal: Inform -> Viz/Presentation: Text block -> Interaction: Read -> Justification: Direct information -> Library/Method: HTML
+        - Report Info: Relevant Resources -> Goal: Inform -> Viz/Presentation: Bulleted list with links -> Interaction: Read, Click links -> Justification: Actionable information -> Library/Method: HTML
+        - Report Info: Task Categorization (derived) -> Goal: Organize/Overview -> Viz/Presentation: Bar Chart (Number of tasks per category) -> Interaction: View -> Justification: Quick overview of task distribution -> Library/Method: Chart.js/Canvas
+        - Report Info: Search/Filter -> Goal: Find Specific Task -> Viz/Presentation: Input field above task list -> Interaction: Type to filter -> Justification: Quick access to tasks -> Library/Method: JS
+    -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px; /* Max width for the chart */
+            margin-left: auto;
+            margin-right: auto;
+            height: 250px; /* Base height */
+            max-height: 300px; /* Max height */
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+        /* Scrollbar styling for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c4c4c4;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+        .task-item.active {
+            background-color: #f59e0b; /* amber-500 */
+            color: white;
+        }
+        .category-title.active-category {
+             background-color: #e5e7eb; /* gray-200 for active category header */
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <aside id="sidebar" class="w-full md:w-72 lg:w-80 bg-stone-200 p-6 space-y-4 shadow-lg transition-all duration-300 ease-in-out md:translate-x-0 md:block fixed md:relative h-screen md:h-auto overflow-y-auto -translate-x-full z-20">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-neutral-700">Task Guide</h1>
+                <button id="closeSidebarButton" class="md:hidden text-stone-600 hover:text-amber-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <input type="text" id="searchInput" placeholder="Search tasks..." class="w-full p-2 border border-stone-300 rounded-md focus:ring-amber-500 focus:border-amber-500 transition-colors">
+            <nav id="taskNavigation" class="space-y-2"></nav>
+        </aside>
+
+        <main class="flex-1 p-6 md:p-10 bg-stone-50 overflow-y-auto">
+            <button id="openSidebarButton" class="md:hidden fixed top-4 left-4 z-30 bg-amber-500 text-white p-2 rounded-md shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+            </button>
+
+            <div id="welcomeMessage" class="bg-white p-8 rounded-lg shadow-md mb-8">
+                <h2 class="text-3xl font-semibold text-neutral-700 mb-4">Welcome to the Interactive Tech Task Guide</h2>
+                <p class="text-lg text-stone-700 mb-6">
+                    This guide provides information and relevant resources for common technology tasks at the school.
+                    Select a category and task from the sidebar to learn more. You can also use the search bar to quickly find specific tasks.
+                </p>
+                <div class="chart-container">
+                    <canvas id="taskChart"></canvas>
+                </div>
+            </div>
+
+            <div id="taskDetail" class="bg-white p-8 rounded-lg shadow-md hidden">
+                <h2 id="taskTitle" class="text-3xl font-bold text-neutral-700 mb-4"></h2>
+                <div class="prose max-w-none text-stone-700">
+                    <h3 class="text-xl font-semibold text-neutral-600 mt-6 mb-2">Description:</h3>
+                    <p id="taskDescription" class="mb-6"></p>
+                    <h3 class="text-xl font-semibold text-neutral-600 mt-6 mb-2">Relevant Resources:</h3>
+                    <ul id="taskResources" class="list-disc pl-5 space-y-2"></ul>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const tasksData = [
+            {
+                id: 'task1',
+                category: 'Music & Presentation Systems',
+                title: 'Set up and Manage RadioDJ for changeover music',
+                description: "Set up and manage the RadioDJ software to automate the playing of changeover music between classes and at the end of the day, based on the school schedule. This involves creating and scheduling events with start and stop actions for different daily schedules, with consideration for manual control on special schedule days.",
+                resources: [
+                    { text: 'RadioDJ Software: Main tool for automating music playback. Download and documentation.', url: 'https://www.radiodj.ro/' },
+                    { text: 'MySQL Server: Database used by RadioDJ. Requires installation and configuration.', url: 'https://www.mysql.com/' },
+                    { text: '.NET Framework: RadioDJ runs on this Microsoft framework (versions 3.5 & 4.8).' },
+                    { text: 'BASS Sound Engine: Audio processing engine, included with RadioDJ.' },
+                    { text: 'RadioDJ Tutorials and Documentation: Guides available on the RadioDJ website and YouTube.', url: 'https://m.youtube.com/playlist?list=PLurYRU2hWgEGMxFWGA-DESpAcnXqWiG60' },
+                    { text: 'AltaCast (Optional): Encoder plugin for online broadcasting of RadioDJ output.' }
+                ]
+            },
+            {
+                id: 'task2',
+                category: 'Network & Accounts Management',
+                title: 'Help manage internet/phone accounts',
+                description: "Liaise with the internet and phone service provider to ensure continuous and up-to-date service operation. This includes tasks such as monitoring account status, handling billing inquiries, and reporting outages or service issues.",
+                resources: [
+                    { text: 'Comcast Business Account Information: Account number, support contacts, online portal credentials for managing Comcast services.' },
+                    { text: 'BlackBear Fiber Account Information: Account number, support contacts, online portal credentials for managing BlackBear Fiber services.' },
+                    { text: 'Internal Contact Person/Department: Who to contact internally for approvals/decisions on internet/phone services.' },
+                    { text: 'Service Agreements/Contracts: Contracts with providers for understanding terms of service and SLAs.' },
+                    { text: 'Troubleshooting Basic Internet/Phone Issues Knowledge: Basic diagnosis skills (modem resets, cable checks).' }
+                ]
+            },
+            {
+                id: 'task3',
+                category: 'Security & Access',
+                title: 'Help with door access and security processes',
+                description: "Manage the system for granting building access to students and staff, including setting up access permissions and managing the time schedules for when access is active. Additionally, this involves overseeing camera access and ensuring adherence to security policies related to building entry and surveillance.",
+                resources: [
+                    { text: 'UniFi Protect: System for managing security cameras (viewing feeds, managing recordings).' },
+                    { text: 'UniFi Access: System for managing door access (granting/revoking permissions, configuring schedules).' },
+                    { text: 'NFC Cards: Physical credentials for building access; associate with user accounts in UniFi Access.' },
+                    { text: 'Andrew Pealock (Consultant): Key resource for system setup, management, and troubleshooting.' },
+                    { text: "School Security Policies and Procedures: Official guidelines for building access, camera usage, and incident response." },
+                    { text: 'Building Floor Plans: Helpful for understanding placement of access points and cameras.' }
+                ]
+            },
+            {
+                id: 'task4',
+                category: 'Network & Accounts Management',
+                title: 'Troubleshoot internet/phone problems',
+                description: "Diagnose and resolve internet and phone connectivity issues by understanding the network infrastructure, identifying whether the problem lies within the school's internal network, the internet service provider's connection, or the user's device. This includes assisting users with basic internet usage, troubleshooting network problems, and contacting the service provider for assistance when necessary.",
+                resources: [
+                    { text: 'speedtest.net: Online tool for testing internet connection speed (bandwidth, latency).', url: 'http://speedtest.net' },
+                    { text: 'Comcast Business Account Information: For reporting outages or service issues to Comcast.' },
+                    { text: 'BlackBear Fiber Account Information: For reporting outages or service issues to BlackBear Fiber.' },
+                    { text: 'Andrew Pealock (Consultant): Resource for complex troubleshooting and network design insights.' },
+                    { text: 'Understanding of Basic Modem, Router, Computer, and Phone Networking Information: Foundational knowledge of device roles and basic configurations.' },
+                    { text: 'Ping and Traceroute Utilities: Command-line tools for testing connectivity and identifying connection path failures.' },
+                    { text: 'Router/Firewall Configuration Access: For diagnosing network issues, checking logs (with appropriate permissions).' },
+                    { text: 'Physical Inspection Tools: Ethernet cables for testing, visual inspection of connections.' }
+                ]
+            },
+            {
+                id: 'task5',
+                category: 'Livestream',
+                title: 'Manage live streaming equipment',
+                description: "Maintain an inventory of all equipment used for live streaming, ensuring it is organized and readily available when needed. This includes school cameras, the designated streaming computer, and any borrowed equipment. Proactively identify and gather necessary cables, microphones, tape, lighting, and ensure the live streaming software is prepared for use.",
+                resources: [
+                    { text: 'HDMI Cables: For video signal transmission.' },
+                    { text: 'HDMI Fiber Cables: For longer distance signal transmission.' },
+                    { text: 'Micro-HDMI Cords: For specific camera models.' },
+                    { text: 'Micro-HDMI to HDMI Adapters: For converting camera connections.' },
+                    { text: 'Gaff Tape: For securing cables and managing setup.' },
+                    { text: 'ATEM Mini Switcher: Video switcher for multiple sources.' },
+                    { text: 'Focusrite Scarlett (for audio): Audio interface for connecting microphones.' },
+                    { text: 'Regular Tech Room Devices: Computers, monitors for control.' },
+                    { text: 'USB-C to HDMI Adapters: For connecting USB-C devices.' },
+                    { text: 'Extension Cords & Power Strips: For powering equipment.' },
+                    { text: 'Tripods: For stabilizing cameras.' },
+                    { text: 'Cameras: Primary video sources.' },
+                    { text: 'Elgato Cam Link: Connects HDMI cameras to computer via USB.' },
+                    { text: 'MimoLive (Software): Live video production software.' },
+                    { text: 'OBS (Open Broadcaster Software) (Alternative): Free, open-source streaming software.' },
+                    { text: 'vMix (Alternative): Paid, advanced live production software.' },
+                    { text: 'Pure Freedom (Contact): External resource for borrowing additional equipment.' }
+                ]
+            },
+            {
+                id: 'task6',
+                category: 'Network & Accounts Management',
+                title: 'Manage Adobe accounts',
+                description: "Maintain an organized record of all Adobe accounts utilized by the school, including those directly managed by the school and any associated accounts through Pure Freedom. This involves knowing who has access to which accounts and potentially managing licenses or user assignments.",
+                resources: [
+                    { text: 'Adobe Account Login Credentials: Usernames and passwords for school Adobe accounts.' },
+                    { text: 'List of Users and Assigned Licenses: Record of who has which Adobe licenses.' },
+                    { text: 'Adobe Admin Console Access: For managing users, licenses, and services in organizational plans.' },
+                    { text: 'Pure Freedom Account Information (related to Adobe): Details of Adobe accounts managed via Pure Freedom.' },
+                    { text: "Understanding of Adobe Licensing: Knowledge of the school's licensing agreement." },
+                    { text: 'Contact Person for Adobe Support: For resolving account or licensing issues.' }
+                ]
+            },
+            {
+                id: 'task7',
+                category: 'Music & Presentation Systems',
+                title: 'Manage school ProPresenter Account',
+                description: "Oversee the school's ProPresenter account, which is utilized on the tech room Mac Mini and shared with Pure Freedom and Centre Church. This includes managing the software installation and ensuring its availability on a laptop for off-campus events. ProPresenter is crucial for delivering professional presentations for chapel and other large group gatherings by storing files offline, efficiently handling worship slides, and managing video playback (though video files need to be locally stored). A key part of preparation involves converting presentations from various formats (Canva, Keynote, PowerPoint, Google Slides) to PNG images for optimal use within ProPresenter.",
+                resources: [
+                    { text: 'Login Information for Renewed Vision: For managing the ProPresenter account.', url: 'https://www.renewedvision.com/' },
+                    { text: 'ProPresenter Software: The primary presentation tool. User Guide available.', url: 'https://learn.renewedvision.com/propresenter' },
+                    { text: 'Tech Room Mac Mini: Primary computer for ProPresenter use.' },
+                    { text: 'Laptop for Off-Campus Use: For ProPresenter use at events.' },
+                    { text: 'Pure Freedom and Centre Church Shared Account Protocols: Understanding shared access and file conventions.' },
+                    { text: 'Presentation Files: Familiarity with file locations and organization.' }
+                ]
+            },
+            {
+                id: 'task8',
+                category: 'Music & Presentation Systems',
+                title: 'Manage Planning Center Software',
+                description: "Administer the Planning Center Software used by the worship team for scheduling team members and organizing worship services. This includes managing user accounts, overseeing the integration with SongSelect for accessing and distributing music information, setting up sign-ups for various roles, and ensuring email reminders are functioning correctly for scheduled team members.",
+                resources: [
+                    { text: 'Planning Center Account Login: For managing the account.', url: 'https://www.planningcenter.com/' },
+                    { text: 'Planning Center Software: Understanding its various modules for worship planning.' },
+                    { text: 'SongSelect Integration: For importing song information into Planning Center.' },
+                    { text: 'Worship Team Contact Information: For scheduling and communication.' },
+                    { text: 'Email Reminder System: Understanding configuration for team notifications.' }
+                ]
+            },
+            {
+                id: 'task9',
+                category: 'Music & Presentation Systems',
+                title: 'Manage Songselect software',
+                description: "Oversee the SongSelect software account, which provides the necessary licensing to legally use worship songs, including access to lyrics and music sheets for a wide variety of songs. This likely involves managing the subscription, ensuring compliance with licensing terms, and potentially assisting users in accessing the SongSelect library.",
+                resources: [
+                    { text: 'SongSelect Account Login: For managing the account and accessing resources.', url: 'https://songselect.ccli.com/' },
+                    { text: 'SongSelect by CCLI integration: Allows import of lyrics/charts into other services (e.g., Planning Center). Requires paid account and activity every 60 days.' },
+                    { text: 'Understanding of CCLI Licensing: Ensuring legal use of copyrighted materials.' }
+                ]
+            },
+            {
+                id: 'task10',
+                category: 'Livestream',
+                title: 'Livestream software',
+                description: "Manage the live streaming software used to broadcast video and audio content. This involves ensuring compatibility with all connected hardware, configuring scenes with various video and audio sources, testing the setup for proper functionality, and integrating the software with platforms like Facebook Live for streaming.",
+                resources: [
+                    { text: 'MimoLive: Live video production software. Requires installation and license.' },
+                    { text: 'vMix: Professional live video production software. Requires installation and license.' },
+                    { text: 'OBS (Open Broadcaster Software): Free, open-source streaming software.' },
+                    { text: 'Facebook Live Account Credentials: For broadcasting streams to Facebook.' },
+                    { text: 'Hardware Connection Documentation: Understanding how equipment connects to the streaming computer.' },
+                    { text: 'Understanding of RTMP (Real-Time Messaging Protocol): Standard protocol for streaming video.' }
+                ]
+            },
+            {
+                id: 'task11',
+                category: 'Network & Accounts Management',
+                title: 'Help with logins for Netflix, LinkedIn Learning',
+                description: "Provide users with access to the login credentials (usernames and passwords) for the school's Netflix and LinkedIn Learning accounts as needed. This primarily involves knowing where this information is stored and securely sharing it with authorized individuals.",
+                resources: [
+                    { text: 'Logins and Passwords Document: Contains credentials for Netflix and LinkedIn Learning.' },
+                    { text: "School Policy on Sharing Credentials: Guidelines for secure sharing of login info." },
+                    { text: 'Method for Securely Sharing Information: Using private communication channels.' },
+                    { text: 'List of Authorized Users (Optional): To ensure credentials are shared appropriately.' }
+                ]
+            },
+            {
+                id: 'task12',
+                category: 'Music & Presentation Systems',
+                title: 'Utilize Personal Music Streaming Services for Ad-Free Playback',
+                description: "To avoid advertisements when playing music for school-related purposes (e.g., during events, in common areas), personal premium subscriptions to music streaming services like Spotify, Apple Music, or YouTube Music are currently utilized. The ideal outcome would be for the school to invest in a premium music streaming service (preferably Apple Music due to existing Apple devices, or alternatives like Spotify or YouTube Music) and potentially YouTube Premium to eliminate ads across the YouTube platform, given its frequent use within the school environment.",
+                resources: [
+                    { text: 'Knowledge of Personal Music Streaming Service Accounts: How to use personal premium accounts (Spotify, Apple Music, YouTube Music).' },
+                    { text: 'Personal Devices: Phone, laptop for playback.' },
+                    { text: "School Audio Systems: How to connect personal devices (Bluetooth, aux cables)." },
+                    { text: "Understanding of School's Needs for Ad-Free Media: Awareness of where ad-free playback is desired." },
+                    { text: "Information on Potential School-Provided Premium Services: Research pricing/licensing for educational accounts (Apple Music, Spotify, YouTube Premium for Education), compatibility, account management, and provider contacts." }
+                ]
+            },
+            {
+                id: 'task13',
+                category: 'Hardware & Classroom Support',
+                title: 'Support classroom technology (smartboards, displays, speakers, cables)',
+                description: "Ensure classrooms have functional and relevant display technology, including TVs and smartboards. This involves providing necessary display adapters (e.g., USB-C to HDMI) and assisting users in resolving display or audio-related issues with their classroom technology.",
+                resources: [
+                    { text: 'Knowledge of Smartboard Functionality: Calibration, pen usage, software, basic troubleshooting.' },
+                    { text: 'Knowledge of Display Connectivity: Different display types and connection methods (HDMI, VGA, DisplayPort).' },
+                    { text: 'Inventory of Available Display Adapters (USB-C to HDMI, etc.): Knowing availability and device requirements.' },
+                    { text: 'Basic Audio Troubleshooting Skills: Diagnosing common audio problems.' },
+                    { text: 'Assortment of Common Cables: Spare HDMI, audio, and display cables.' },
+                    { text: 'Access to Equipment Manuals (if available): For detailed troubleshooting.' },
+                    { text: 'Network Connectivity Basics (for smartboards/displays): Understanding network connections.' }
+                ]
+            },
+            {
+                id: 'task14',
+                category: 'Hardware & Classroom Support',
+                title: 'Order and support staff computers',
+                description: "Assist in the decision-making process for purchasing computers for staff use. This includes setting up new computers, connecting them to the internet and printers, ensuring necessary software is installed and functional, and providing ongoing technical support and troubleshooting for these staff computers.",
+                resources: [
+                    { text: 'General Technical Knowledge: Hardware, OS, networking, software, peripherals.' },
+                    { text: 'Google Search: For solutions, hardware specs, software compatibility.' },
+                    { text: 'AI-Assisted Troubleshooting Tools: For diagnosis, solutions, guides (AI knowledge bases, chatbots, diagnostic tools).' },
+                    { text: 'Vendor Information (for purchasing): Preferred vendors, school budget/requirements, educational discounts.' },
+                    { text: 'Operating System Installation Media/Tools: For setup and recovery.' },
+                    { text: 'Software Installation Files and Licenses: For staff applications.' },
+                    { text: 'Network Configuration Information: Wi-Fi passwords, network drives, printer servers.' },
+                    { text: 'Remote Desktop Software (for support): For remote access and troubleshooting.' },
+                    { text: 'Printer Drivers and Configuration Tools: For printer setup.' }
+                ]
+            },
+            {
+                id: 'task15',
+                category: 'Hardware & Classroom Support',
+                title: 'Ensure Functionality of Tech Room and Lab Computers',
+                description: "Maintain the operational status of computers in the tech room and labs. This includes managing user logins, ensuring operating systems and relevant software are kept updated, and verifying software licenses are current and applied correctly.",
+                resources: [
+                    { text: 'General Technical Proficiency: Strong understanding of hardware, OS, software updates, networking, and troubleshooting for maintenance.' }
+                ]
+            },
+            {
+                id: 'task16',
+                category: 'Hardware & Classroom Support',
+                title: 'Basic Awareness and Use of Camera Equipment',
+                description: "Maintain a general awareness of the school's camera equipment, understanding that there are different types used for live streaming and for high-quality photography. This includes knowing that some cameras require charged batteries and SD cards for operation.",
+                resources: [
+                    { text: "General Awareness of Camera Equipment: Understanding types, purposes, and basic needs (batteries, SD cards)." }
+                ]
+            },
+            {
+                id: 'renweb-courses-classes',
+                category: 'Renweb',
+                title: 'Renweb: Creating Courses and Classes',
+                description: 'Outlines the semi-annual procedure for adding new courses and creating their corresponding class sections within Renweb, including defining course details and assigning class attributes.',
+                resources: [
+                    { text: 'Course and Class Configuration Learning Outline', url: 'Course and Class Configuration Learning Outline' }
+                ]
+            },
+            {
+                id: 'renweb-master-schedule',
+                category: 'Renweb',
+                title: 'Renweb: Inputting the Master Schedule',
+                description: 'Details the annual process of transferring the finalized school master schedule into Renweb, including student assignments to classes and conflict resolution.',
+                resources: [
+                    { text: 'SIS Scheduling Overview (We would use last year’s classes or last year’s schedule)' },
+                    { text: 'Scheduling Checklist' }
+                ]
+            },
+            {
+                id: 'renweb-eoy-rollover',
+                category: 'Renweb',
+                title: 'Renweb: End of Year Changover (Rollover)',
+                description: 'Covers the critical annual steps for closing out the current academic year and preparing Renweb for the new academic year, including student promotion and data archiving.',
+                resources: [
+                    { text: 'Ending a School Year in FACTS SIS Learning Outline', url: 'Ending a School Year in FACTS SIS Learning Outline' }
+                ]
+            },
+            {
+                id: 'renweb-report-card-data',
+                category: 'Renweb',
+                title: 'Renweb: Report Card Data Load and Grade Calculation',
+                description: 'Explains the semi-annual procedure for ensuring all teacher grades are entered, loading data for report cards, and triggering the calculation of GPAs and other academic metrics.',
+                resources: [
+                    { text: 'Recalculate Gradebook' },
+                    { text: 'Report Card Load' },
+                    { text: 'Report Cards Learning Outline' }
+                ]
+            },
+            {
+                id: 'renweb-report-card-proofreading',
+                category: 'Renweb',
+                title: 'Renweb: Report Card Comment Proofreading',
+                description: 'Details the semi-annual process for systematically reviewing and proofreading all teacher-entered report card comments for accuracy, professionalism, and appropriateness.',
+                resources: [
+                    { text: 'Report Card Comments', url: 'Report Card Comments' },
+                    { text: 'It can be easiest to edit comments here: Report Card Student', url: 'Report Card Student' }
+                ]
+            },
+            {
+                id: 'renweb-report-card-fixes',
+                category: 'Renweb',
+                title: 'Renweb: Report Card Fixes and Verification',
+                description: 'Outlines the semi-annual steps for identifying, correcting, and verifying fixes for any errors found on report cards, such as incorrect grades or missing information.',
+                resources: [
+                    { text: 'Fix Report Card Grades', url: 'Fix Report Card Grades' }
+                ]
+            },
+            {
+                id: 'renweb-new-teacher-training',
+                category: 'Renweb',
+                title: 'Renweb: New Teacher Training Support',
+                description: 'Provides a framework and checklist for annually (or as needed) training new teachers on essential Renweb functionalities, including gradebook management, attendance, and report card entry.',
+                resources: [
+                    { text: 'Teacher Classroom and Gradebook', url: 'Teacher Classroom and Gradebook' }
+                ]
+            },
+            {
+                id: 'renweb-general-troubleshooting',
+                category: 'Renweb',
+                title: 'Renweb: General Troubleshooting Assistance',
+                description: 'A guide for providing on-demand support to users experiencing common problems with Renweb, including diagnostic steps and solutions for frequent issues.',
+                resources: [
+                    { text: 'Just search on FACTS HubHelp for what you need.' },
+                    { text: 'If you get really stuck call FACTS Technical Support' }
+                ]
+            },
+            {
+                id: 'renweb-lunch-program',
+                category: 'Renweb',
+                title: 'Renweb: Lunch Program Setup and Support',
+                description: 'Details the weekly (or cyclical) tasks for configuring the lunch program in Renweb, including menu setup, account management, and report generation.',
+                resources: [
+                    { text: 'HubHelp Cafeteria Guide', url: 'HubHelp Cafeteria Guide' }
+                ]
+            },
+            {
+                id: 'renweb-admissions-config',
+                category: 'Renweb',
+                title: 'Renweb: Admissions Module Configuration',
+                description: 'Outlines the annual process for setting up and configuring the Renweb admissions module, including application forms, workflows, and communication templates for new enrollment periods.',
+                resources: [
+                    { text: 'HubHelp Admissions Section', url: 'HubHelp Admissions Section' }
+                ]
+            },
+            {
+                id: 'renweb-admissions-troubleshooting',
+                category: 'Renweb',
+                title: 'Renweb: Admissions Troubleshooting Support',
+                description: 'A guide for addressing and resolving common issues encountered by applicants or admissions staff within the Renweb admissions module, performed as needed.',
+                resources: [
+                    { text: 'Hubhelp Admissions Section', url: 'Hubhelp Admissions Section' }
+                ]
+            },
+            {
+                id: 'nso-order-computers',
+                category: 'NSO',
+                title: 'Order Computers For New Students',
+                description: "Select and order Chromebooks for all new students who have chosen the school's computer option. Ensure these Chromebooks are charged and ready for distribution during New Student Orientation (NSO). Note that due to the lack of Google Workspace for Education, the Chromebooks are managed by the students' personal Gmail accounts, requiring a phone for setup, and some accounts are managed by parents.",
+                resources: [
+                    { text: 'Chromebook: Knowledge of Chromebook models, specifications, and ordering process.' },
+                    { text: 'Google Accounts: Basic understanding of personal Gmail accounts and their setup on Chromebooks.' }
+                ]
+            },
+            {
+                id: 'nso-email-accounts',
+                category: 'NSO',
+                title: 'Set up Grace Prep Email Accounts for new students',
+                description: "Allocate and configure new Microsoft 365 accounts for education for all new students, providing them with a Grace Prep email address. Students have the option to forward their school email to their personal Gmail accounts. These Microsoft 365 accounts also grant access to various Microsoft Office web applications.",
+                resources: [
+                    { text: 'Microsoft 365 Admin Center Access: For creating new accounts, assigning licenses, and setting passwords.' },
+                    { text: 'List of New Students: Comprehensive list of incoming students for account creation.' },
+                    { text: 'School\'s Email Address Naming Convention: `firstname.lastname@graceprep.com` for consistent account creation.' }
+                ]
+            },
+            {
+                id: 'printing-setup',
+                category: 'Printing',
+                title: 'Set up Printing for Students and Staff Members',
+                description: "Establish printing access for students and staff by setting up individual accounts on the school's locally hosted and managed PaperCut server. The physical printers are leased from Doceo, who also provides support for both the printer hardware and the PaperCut software.",
+                resources: [
+                    { text: 'PaperCut Server Access: For creating and managing user accounts and printer access.' },
+                    { text: 'List of Students and Staff: Directory of individuals needing printing access.' },
+                    { text: 'Doceo Support Contact Information: For assistance with PaperCut software and printer hardware.' }
+                ]
+            },
+            {
+                id: 'printing-troubleshoot',
+                category: 'Printing',
+                title: 'Troubleshoot Printer Problems',
+                description: "Diagnose and resolve technical difficulties related to printers and copiers. Common issues include printers or the print server disconnecting from the network, incorrect user computer configurations, print formatting challenges, and users forgetting their PaperCut account information. The goal is to restore printing functionality and assist users in overcoming these obstacles.",
+                resources: [
+                    { text: 'Knowledge of PaperCut: Understanding server status, user accounts, print queues, error logs, and configurations.' },
+                    { text: 'Doceo Customer Support Contact Information: For issues beyond basic troubleshooting or hardware malfunctions.' },
+                    { text: 'Basic Networking Knowledge: For diagnosing network connectivity issues with printers/server.' },
+                    { text: 'Access to User Computer Configurations: For checking client-side print settings.' },
+                    { text: 'PaperCut User Portal Instructions: For guiding users on account recovery.' }
+                ]
+            },
+            {
+                id: 'techroom-announcements',
+                category: 'Tech Room',
+                title: 'Support Morning Announcements with slides/video/audio',
+                description: "Review the morning announcement schedule and provide any necessary technical assistance to ensure the smooth delivery of announcements involving slides, video, and audio elements. This includes being available in the tech room to troubleshoot issues and facilitate the technical aspects of the presentations.",
+                resources: [
+                    { text: 'Morning Announcement Schedule Document: Outlines schedule and technical requirements for announcements.' }
+                ]
+            },
+            {
+                id: 'techroom-chapel-support',
+                category: 'Tech Room',
+                title: 'Support Chapel with slides/video/audio',
+                description: "Collaborate with chapel speakers and worship teams to prepare visual elements in ProPresenter, including message slides and song lyrics. This also involves training and assisting students in operating the technical aspects of chapel presentations. Additionally, provide support to the worship team in setting up and ensuring their instruments are functioning correctly for practices before chapel services.",
+                resources: [
+                    { text: 'ProPresenter: Software for displaying message and lyric slides.' },
+                    { text: 'X32 Soundboard: Digital mixing console for managing chapel audio.' },
+                    { text: 'Music Equipment: Instruments used by the worship team; ensuring power, connection, and function.' }
+                ]
+            },
+            {
+                id: 'techroom-extreme-grace-trips',
+                category: 'Tech Room',
+                title: 'Support Worship/Tech for Extreme Grace Trips',
+                description: "Provide technical support for worship services and presentations during Extreme Grace Trips, similar to the support given for on-campus chapel services. This includes preparing slides and lyrics, managing audio, and training students. A key difference is the need to bring necessary equipment and adapt to the technical resources available at the trip locations.",
+                resources: [
+                    { text: 'ProPresenter (Laptop Installation): For off-site presentations.' },
+                    { text: 'Portable Audio Equipment: Portable mixers, microphones, cables for venue adaptation.' },
+                    { text: 'Adapters and Connectors: Various video and audio adapters for compatibility.' },
+                    { text: 'Basic Troubleshooting Knowledge (Audio/Visual): For quick issue resolution in unfamiliar environments.' },
+                    { text: 'Contact Information for Venue Tech Support (if available): For complex issues or understanding venue capabilities.' }
+                ]
+            },
+            {
+                id: 'techroom-trivia-night',
+                category: 'Tech Room',
+                title: 'Trivia Night',
+                description: "Provide technical support for Trivia Night events, utilizing similar audio-visual equipment as used for chapel services (slides, video, audio). Additionally, manage and operate the Crowdpurr software, a paid platform (subscribed for one month at a time) that allows for branded trivia game presentation and scoring.",
+                resources: [
+                    { text: 'Crowdpurr Account: Login credentials and operational knowledge for trivia game setup and presentation.' }
+                ]
+            },
+            {
+                id: 'techroom-record-audio',
+                category: 'Tech Room',
+                title: 'Record audio for chapels',
+                description: "Capture high-quality audio recordings of chapel services. This likely involves setting up microphones, utilizing recording equipment, and operating audio recording software to ensure a clear and balanced recording of the speakers, worship team, and any other audio elements of the service. The recordings may be used for archival purposes, sharing with those who could not attend, or for other school-related uses.",
+                resources: [
+                    { text: 'Audacity (or similar audio recording software): For recording, editing, and saving audio.' },
+                    { text: 'Focusrite Scarlett USB Interface: Hardware for inputting audio from the soundboard to the computer.' }
+                ]
+            }
+        ];
+
+        const taskNavigation = document.getElementById('taskNavigation');
+        const taskTitle = document.getElementById('taskTitle');
+        const taskDescription = document.getElementById('taskDescription');
+        const taskResources = document.getElementById('taskResources');
+        const taskDetailView = document.getElementById('taskDetail');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const searchInput = document.getElementById('searchInput');
+        const sidebar = document.getElementById('sidebar');
+        const openSidebarButton = document.getElementById('openSidebarButton');
+        const closeSidebarButton = document.getElementById('closeSidebarButton');
+
+        let activeTaskItem = null;
+        let activeCategoryTitle = null;
+
+        function groupTasksByCategory(tasks) {
+            return tasks.reduce((acc, task) => {
+                (acc[task.category] = acc[task.category] || []).push(task);
+                return acc;
+            }, {});
+        }
+
+        function displayTasks(tasksToDisplay) {
+            const groupedTasks = groupTasksByCategory(tasksToDisplay);
+            taskNavigation.innerHTML = ''; // Clear existing navigation
+
+            Object.keys(groupedTasks).sort().forEach(category => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'mb-3';
+
+                const categoryTitleButton = document.createElement('button');
+                categoryTitleButton.className = 'category-title w-full text-left text-lg font-semibold text-neutral-600 hover:text-amber-600 p-2 rounded-md transition-colors duration-150 flex justify-between items-center';
+                categoryTitleButton.innerHTML = `
+                    <span>${category}</span>
+                    <svg class="w-4 h-4 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                `;
+
+                const taskListUl = document.createElement('ul');
+                taskListUl.className = 'ml-2 mt-1 space-y-1 hidden'; // Hidden by default
+
+                groupedTasks[category].forEach(task => {
+                    const listItem = document.createElement('li');
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = task.title;
+                    link.className = 'task-item block p-2 text-stone-700 hover:bg-amber-400 hover:text-white rounded-md transition-colors duration-150 text-sm';
+                    link.dataset.taskId = task.id;
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        showTaskDetails(task.id);
+                        if (activeTaskItem) {
+                            activeTaskItem.classList.remove('active');
+                        }
+                        link.classList.add('active');
+                        activeTaskItem = link;
+
+                        if (activeCategoryTitle && activeCategoryTitle !== categoryTitleButton) {
+                            activeCategoryTitle.classList.remove('active-category');
+                            const prevTaskList = activeCategoryTitle.nextElementSibling;
+                            if(prevTaskList && prevTaskList.tagName === 'UL') prevTaskList.classList.add('hidden');
+                            activeCategoryTitle.querySelector('svg').classList.remove('rotate-180');
+
+                        }
+                        if (activeCategoryTitle !== categoryTitleButton) {
+                             categoryTitleButton.classList.add('active-category');
+                             taskListUl.classList.remove('hidden');
+                             categoryTitleButton.querySelector('svg').classList.add('rotate-180');
+                             activeCategoryTitle = categoryTitleButton;
+                        }
+
+
+                        if (window.innerWidth < 768) { // md breakpoint
+                            sidebar.classList.add('-translate-x-full');
+                        }
+                    });
+                    listItem.appendChild(link);
+                    taskListUl.appendChild(listItem);
+                });
+
+                categoryTitleButton.addEventListener('click', () => {
+                    taskListUl.classList.toggle('hidden');
+                    categoryTitleButton.querySelector('svg').classList.toggle('rotate-180');
+                     if (activeCategoryTitle && activeCategoryTitle !== categoryTitleButton) {
+                        activeCategoryTitle.classList.remove('active-category');
+                         const prevTaskList = activeCategoryTitle.nextElementSibling;
+                         if(prevTaskList && prevTaskList.tagName === 'UL') prevTaskList.classList.add('hidden');
+                         activeCategoryTitle.querySelector('svg').classList.remove('rotate-180');
+                    }
+                    if(taskListUl.classList.contains('hidden')) {
+                        categoryTitleButton.classList.remove('active-category');
+                        if(activeCategoryTitle === categoryTitleButton) activeCategoryTitle = null;
+                    } else {
+                        categoryTitleButton.classList.add('active-category');
+                        activeCategoryTitle = categoryTitleButton;
+                    }
+                });
+
+                categoryDiv.appendChild(categoryTitleButton);
+                categoryDiv.appendChild(taskListUl);
+                taskNavigation.appendChild(categoryDiv);
+            });
+        }
+
+        function showTaskDetails(taskId) {
+            const task = tasksData.find(t => t.id === taskId);
+            if (task) {
+                taskTitle.textContent = task.title;
+                taskDescription.textContent = task.description;
+                taskResources.innerHTML = ''; // Clear previous resources
+                task.resources.forEach(resource => {
+                    const listItem = document.createElement('li');
+                    if (resource.url) {
+                        const link = document.createElement('a');
+                        link.href = resource.url;
+                        link.textContent = resource.text;
+                        link.target = '_blank';
+                        link.rel = 'noopener noreferrer';
+                        link.className = 'text-amber-600 hover:text-amber-700 underline transition-colors';
+                        listItem.appendChild(link);
+                    } else {
+                        listItem.textContent = resource.text;
+                    }
+                    taskResources.appendChild(listItem);
+                });
+                welcomeMessage.classList.add('hidden');
+                taskDetailView.classList.remove('hidden');
+            }
+        }
+
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredTasks = tasksData.filter(task =>
+                task.title.toLowerCase().includes(searchTerm) ||
+                task.description.toLowerCase().includes(searchTerm) ||
+                task.category.toLowerCase().includes(searchTerm)
+            );
+            displayTasks(filteredTasks);
+        });
+
+        openSidebarButton.addEventListener('click', () => {
+            sidebar.classList.remove('-translate-x-full');
+        });
+
+        closeSidebarButton.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+        });
+
+        // Chart.js for task distribution
+        const groupedTasksForChart = groupTasksByCategory(tasksData);
+        const chartLabels = Object.keys(groupedTasksForChart).sort();
+        const chartDataCounts = chartLabels.map(label => groupedTasksForChart[label].length);
+
+        const ctx = document.getElementById('taskChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: '# of Tasks',
+                    data: chartDataCounts,
+                    backgroundColor: [
+                        'rgba(251, 146, 60, 0.7)', // amber-500
+                        'rgba(120, 113, 108, 0.7)', // stone-500
+                        'rgba(245, 158, 11, 0.7)', // amber-600
+                        'rgba(168, 162, 158, 0.7)'  // stone-400
+                    ],
+                    borderColor: [
+                        'rgba(251, 146, 60, 1)',
+                        'rgba(120, 113, 108, 1)',
+                        'rgba(245, 158, 11, 1)',
+                        'rgba(168, 162, 158, 1)'
+                    ],
+                    borderWidth: 1,
+                    borderRadius: 5,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1,
+                            color: '#78716c' // stone-500
+                        },
+                        grid: {
+                            color: '#d6d3d1' // stone-300
+                        }
+                    },
+                    x: {
+                         ticks: {
+                            color: '#78716c', // stone-500
+                             font: {
+                                size: 10 // Smaller font for x-axis labels if needed
+                            },
+                            // Basic label wrapping logic for Chart.js
+                            callback: function(value) {
+                                const maxLength = 16; // Max characters per line
+                                const label = this.getLabelForValue(value);
+                                if (label.length > maxLength) {
+                                    let lines = [];
+                                    let currentLine = '';
+                                    label.split(' ').forEach(word => {
+                                        if ((currentLine + word).length > maxLength) {
+                                            lines.push(currentLine.trim());
+                                            currentLine = '';
+                                        }
+                                        currentLine += word + ' ';
+                                    });
+                                    lines.push(currentLine.trim());
+                                    return lines;
+                                }
+                                return label;
+                            }
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#44403c', // stone-700
+                        titleColor: '#fafaf9', // stone-50
+                        bodyColor: '#fafaf9',
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y;
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Initialize task navigation
+        displayTasks(tasksData);
+
+    </script>
+</body>
+</html>
